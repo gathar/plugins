@@ -1,0 +1,25 @@
+#!/bin/bash
+
+# visudo: "nagios ALL = NOPASSWD: /usr/bin/bconsole"
+# nrpe.cfg: "command[check_bacula-jobs]=/usr/lib/nagios/plugins/check_bacula-jobs"
+
+STATE="running waiting_execution waiting_on_max_Storage_jobs waiting_on_max_Client_jobs waiting_for_a_mount_request waiting_on_Storage canceled"
+
+JOBS=0
+
+for J in $STATE; do
+        CLEAN_STATE=`echo $J|sed 's/_/\ /g'`
+        SUM=`echo "status dir"|sudo bconsole|grep "$CLEAN_STATE"|grep -v "$CLEAN_STATE"|wc -l`
+	let JOBS=$JOBS+$SUM
+done
+
+if [ $JOBS -gt 60 ]; then
+	echo "CRITICAL - $JOBS jobs in queue"
+	exit 2
+elif [ $JOBS -gt 50 ]; then
+	echo "WARNING - $JOBS jobs in queue"
+	exit 1
+else
+	echo "OK - $JOBS jobs in queue"
+	exit 0
+fi
