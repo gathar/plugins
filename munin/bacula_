@@ -1,0 +1,162 @@
+#!/bin/bash
+
+### MySQL Connect
+MYSQL_USER="bacula"
+MYSQL_PASS=""
+MYSQL_HOST="localhost"
+
+### Base Parameter
+BASEPARAM=`basename $0 | sed 's/^bacula_//'`
+if [[ "$BASEPARAM" =~ "host_" ]]; then
+	HOST=`echo $BASEPARAM | sed -e 's/host_//' | sed -e 's/-/_/g' | sed -e 's/\./_/g'`
+fi
+
+### Config header
+if [ "$1" = "config" ]; then
+
+        echo "graph_vlabel Bytes"
+
+	# host
+	if [[ "$BASEPARAM" =~ "host_" ]]; then
+        	echo "graph_category bacula-clients"
+		echo "graph_title $HOST"
+                echo "all.label all"
+                echo "all.info all"
+                echo "monthly.label monthly"
+                echo "monthly.info monthly"
+                echo "daily.label daily"
+                echo "daily.info daily"
+                exit 0
+        fi
+	
+        echo "graph_category bacula"
+
+	# all/monthly/daily
+	if [ $BASEPARAM == "all" ]; then
+		echo "graph_title All Bytes"
+	elif [ $BASEPARAM == "monthly" ]; then
+		echo "graph_title Monthly Bytes"
+	elif [ $BASEPARAM == "daily" ]; then
+		echo "graph_title Daily Bytes"
+	fi
+
+	# generate hosts
+	for A in `echo "use bacula; select Name from Client;" | mysql -u $MYSQL_USER --password=$MYSQL_PASS -h $MYSQL_HOST`; do
+	        for B in `echo $A | grep 'fd.*$' | cut -d"|" -f2 | awk '{sub(/-fd$/,"",$0)}1'`; do
+	                        for E in $B; do
+	                                F=`echo $E | sed -e 's/-/_/g' | sed -e 's/\./_/g'`
+	                                echo "$F.label $F"
+					if [ $BASEPARAM == "all" ]; then
+	                                	echo "$F.info All Bytes"
+					elif [ $BASEPARAM == "monthly" ]; then
+						echo "$F.info Monthly Bytes"
+					elif [ $BASEPARAM == "daily" ]; then
+						echo "$F.info Daily Bytes"
+					fi
+	                        done
+	        done
+	done
+	exit 0
+fi
+
+### all
+if [ $BASEPARAM == "all" ]; then
+	for A in `echo "use bacula; select Name from Client;" | mysql -u $MYSQL_USER --password=$MYSQL_PASS -h $MYSQL_HOST`; do
+		for B in `echo $A | grep 'fd.*$' | cut -d"|" -f2 | awk '{sub(/-fd$/,"",$0)}1'`; do
+                                for D in `echo "use bacula; select JobBytes \
+                                        from Job \
+                                        where Name like '%$B%'" \
+                                        | mysql -u $MYSQL_USER --password=$MYSQL_PASS -h $MYSQL_HOST`; do
+                                                let SUM=$SUM+$D
+                                done
+                                F=`echo $B | sed -e 's/-/_/g' | sed -e 's/\./_/g'`
+                                echo "$F.value $SUM"
+                                SUM=0
+                done
+        done
+
+### monthly
+elif [ $BASEPARAM == "monthly" ]; then
+	for A in `echo "use bacula; select Name from Client;" | mysql -u $MYSQL_USER --password=$MYSQL_PASS -h $MYSQL_HOST`; do
+		for B in `echo $A | grep 'fd.*$' | cut -d"|" -f2 | awk '{sub(/-fd$/,"",$0)}1'`; do
+			        TODAY=`date +%s`
+				START=`date +%F -d @$((TODAY-2592000))`
+				STOP=`date +%F`
+	                        for D in `echo "use bacula; select JobBytes \
+	                                from Job \
+	                                where Name like '%$B%' \
+					and StartTime >= '$START 00:00:00' \
+					and StartTime <= '$STOP 00:00:00'" \
+	                                | mysql -u $MYSQL_USER --password=$MYSQL_PASS -h $MYSQL_HOST`; do
+	                                        let SUM=$SUM+$D
+	                        done
+	                        F=`echo $B | sed -e 's/-/_/g' | sed -e 's/\./_/g'`
+	                        echo "$F.value $SUM"
+	                        SUM=0
+	        done
+	done
+
+### daily 
+elif [ $BASEPARAM == "daily" ]; then
+	for A in `echo "use bacula; select Name from Client;" | mysql -u $MYSQL_USER --password=$MYSQL_PASS -h $MYSQL_HOST`; do
+		for B in `echo $A | grep 'fd.*$' | cut -d"|" -f2 | awk '{sub(/-fd$/,"",$0)}1'`; do
+				TODAY=`date +%F`
+	                        for D in `echo "use bacula; select JobBytes \
+	                                from Job \
+	                                where Name like '%$B%' \
+					and StartTime >= '$TODAY 00:00:00' \
+					and StartTime <= '$TODAY 23:59:59'" \
+	                                | mysql -u $MYSQL_USER --password=$MYSQL_PASS -h $MYSQL_HOST`; do
+	                                        let SUM=$SUM+$D
+	                        done
+	                        F=`echo $B | sed -e 's/-/_/g' | sed -e 's/\./_/g'`
+	                        echo "$F.value $SUM"
+				SUM=0
+		done
+	done
+fi
+
+# host
+if [[ "$BASEPARAM" =~ "host_" ]]; then
+
+	### all	
+	for D in `echo "use bacula; select JobBytes \
+	        from Job \
+	        where Name like '%$HOST%'" \
+	        | mysql -u $MYSQL_USER --password=$MYSQL_PASS -h $MYSQL_HOST`; do
+	                let SUM=$SUM+$D
+	done
+	echo "all.value $SUM"
+	SUM=0
+
+	### monthly
+	TODAY=`date +%s`
+	START=`date +%F -d @$((TODAY-2592000))`
+	STOP=`date +%F`
+	for D in `echo "use bacula; select JobBytes \
+	        from Job \
+	        where Name like '%$HOST%' \
+	        and StartTime >= '$START 00:00:00' \
+	        and StartTime <= '$STOP 00:00:00'" \
+	        | mysql -u $MYSQL_USER --password=$MYSQL_PASS -h $MYSQL_HOST`; do
+	                let SUM=$SUM+$D
+	done
+	echo "monthly.value $SUM"
+	SUM=0
+
+	### daily
+	TODAY=`date +%F`
+	for D in `echo "use bacula; select JobBytes \
+	        from Job \
+	        where Name like '%$HOST%' \
+	        and StartTime >= '$TODAY 00:00:00' \
+	        and StartTime <= '$TODAY 23:59:59'" \
+	        | mysql -u $MYSQL_USER --password=$MYSQL_PASS -h $MYSQL_HOST`; do
+	                let SUM=$SUM+$D
+	done
+	echo "daily.value $SUM"
+	SUM=0
+
+fi
+
+exit 0
