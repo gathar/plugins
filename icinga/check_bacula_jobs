@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # visudo: "nagios ALL = NOPASSWD: /usr/bin/bconsole"
-# nrpe.cfg: "command[check_bacula-jobs]=/usr/lib/nagios/plugins/check_bacula-jobs"
+# nrpe.cfg: "command[check_bacula_jobs]=/usr/lib/nagios/plugins/check_bacula_jobs"
 
 STATE="running waiting_execution waiting_on_max_Storage_jobs waiting_on_max_Client_jobs waiting_for_a_mount_request waiting_on_Storage canceled"
 
